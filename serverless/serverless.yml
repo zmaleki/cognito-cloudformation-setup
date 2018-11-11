@@ -1,0 +1,29 @@
+service:
+  name: aws-cognito-template
+
+# Add the serverless-webpack plugin
+plugins:
+  - serverless-webpack
+
+provider:
+  name: aws
+  stage: dev
+  region: ap-southeast-2
+  runtime: nodejs8.10
+  iamRoleStatements:
+   -  Effect: "Allow"
+      Action: "cognito-idp:*"
+      Resource: "*"
+
+custom:
+  stage: ${opt:stage, 'dev'}
+
+functions:
+  client:
+    handler: src/client.handle
+  domain:
+    handler: src/domain.handle
+  customMessage:
+    handler: src/customMessage.handle
+  customUI:
+    handler: src/customUI.handle

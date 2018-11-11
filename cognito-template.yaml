@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template to provision user pool
+Parameters: 
+  Environment: 
+    Type: String
+    Description: The environment of the resources
+  DeployRegion:
+    Type: String
+    Description: The region in which this stack is deployed
+    Default: ap-southeast-2
+  CustomUIDomain: 
+    Type: String
+    Description: Domain to host the custom UI
+  TheBirdAppRedirectURI:
+    Type: CommaDelimitedList
+    Description: Redirect URIs for your app
+  CustomUICss:
+    Type: String
+    Description: CSS for the CustomUI
+  DomainLambdaFunctionName:
+    Type: String
+    Description: Lambda Function to Create Domain
+  CustomMessageLambdaFunctionName:
+    Type: String
+    Description: Lambda Function to Generate Custom Message
+  ClientLambdaFunctionName:
+    Type: String
+    Description: Lambda Function to Generate Cognito Client
+  CustomUILambdaFunctionName:
+    Type: String
+    Description: Lambda Function to Set Custom UI
+
+Resources:
+  InvokeLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: 
+        !Join [
+          ":",
+          [
+            "arn:aws:lambda",
+            !Ref DeployRegion,
+            !Ref "AWS::AccountId",
+            "function",
+            !Ref CustomMessageLambdaFunctionName,
+          ],
+        ]
+      Action: 'lambda:InvokeFunction'
+      Principal: cognito-idp.amazonaws.com
+
+  theBirdAppUserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      UsernameAttributes: 
+        - email
+      AutoVerifiedAttributes: 
+        - email
+      UserPoolName: !Join [ '-', [theBirdAppUserPool,!Ref Environment] ]
+      Schema: 
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: email 
+          Required: true
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: false
+          Mutable: true
+          Name: source 
+          Required: false
+          StringAttributeConstraints:
+            MaxLength: 20
+            MinLength: 5
+      LambdaConfig:
+        CustomMessage: 
+          !Join [
+            ":",
+            [
+              "arn:aws:lambda",
+              !Ref DeployRegion,
+              !Ref "AWS::AccountId",
+              "function",
+              !Ref CustomMessageLambdaFunctionName,
+            ],
+          ]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      UserPoolTags: 
+        Environment: !Ref Environment
+
+  theBirdAppClient:
+    Type: Custom::CognitoClient
+    Properties:
+      ServiceToken: 
+        !Join [
+          ":",
+          [
+            "arn:aws:lambda",
+            !Ref DeployRegion,
+            !Ref "AWS::AccountId",
+            "function",
+            !Ref ClientLambdaFunctionName,
+          ],
+        ]
+      UserPoolClient:
+        ClientName: theBirdApp
+        CallbackURLs: !Ref TheBirdAppRedirectURI
+        AllowedOAuthFlowsUserPoolClient: true
+        AllowedOAuthFlows: 
+            - code
+            - implicit
+        AllowedOAuthScopes:
+            - email
+            - openid
+            - profile
+        SupportedIdentityProviders: 
+            - COGNITO
+        UserPoolId: !Ref theBirdAppUserPool
+
+  CustomDomain:
+    Type: Custom::CognitoDomain
+    DependsOn:
+      - theBirdAppUserPool
+    Properties:
+      ServiceToken: 
+        !Join [
+          ":",
+          [
+            "arn:aws:lambda",
+            !Ref DeployRegion,
+            !Ref "AWS::AccountId",
+            "function",
+            !Ref DomainLambdaFunctionName,
+          ],
+        ]
+      UserPoolDomain:
+        Domain: !Ref CustomUIDomain
+        UserPoolId: !Ref theBirdAppUserPool
+
+  CustomUI:
+    Type: Custom::CognitoCustomUI
+    DependsOn:
+      - theBirdAppUserPool
+      - CustomDomain
+    Properties:
+      ServiceToken: 
+        !Join [
+          ":",
+          [
+            "arn:aws:lambda",
+            !Ref DeployRegion,
+            !Ref "AWS::AccountId",
+            "function",
+            !Ref CustomUILambdaFunctionName,
+          ],
+        ]
+      CustomUISettings:
+        CSS: !Ref CustomUICss
+        UserPoolId: !Ref theBirdAppUserPool
+        ImageFile: data:image/jpeg;base64,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
