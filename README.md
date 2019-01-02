@@ -5,6 +5,7 @@ Requirements:
 1. AWS CLI must be installed
 
 
+```
 cd serverless
 npm install
 
@@ -15,4 +16,4 @@ serverless deploy
 cd..
 
 aws cloudformation create-stack --stack-name cognito-infrastructure-template --template-body file://cognito-template.yaml --parameters file://cognito-template-dev.json  --capabilities CAPABILITY_NAMED_IAM
-
+```
